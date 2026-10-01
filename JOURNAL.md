@@ -1,35 +1,9 @@
-# SWE Thought Process Journal - grokbuildorderproject
+# Implementation journal
 
-## Why Order Management?
-Core operations system in many companies. Involves:
-- Money and inventory (critical data)
-- Multi-step processes (order -> fulfill -> ship)
-- Concurrency issues (stock levels)
-- Different roles (sales, warehouse, finance)
-- Reporting needs
+The earlier scaffold described an order transaction while leaving stock updates as a TODO. The current implementation puts reservation, historical item snapshots and order creation in one PostgreSQL transaction. Product version checks also prevent a stale catalog form from restoring stock consumed by an order.
 
-Represents real mid-size company backend work.
+The original Jest configuration and Vitest imports disagreed. Backend tests now use Jest against a temporary real PostgreSQL cluster. Frontend tests use Vitest/jsdom; Playwright covers browser-to-database workflows. See [verification](astraupskill/VERIFICATION.md) for executed evidence and limitations.
 
-## Key Decisions
+The React catalog now supports CRUD and order workflows. Business transitions are PENDING to CANCELLED or FULFILLED. Cancellation restores stock once. Fulfillment is final, with no payment integration. Reference constraints protect historical products.
 
-### Inventory & Transactions
-Orders must check and update stock atomically. Use DB transactions in service layer.
-This teaches ACID properties and why services matter.
-
-### Order Status Machine
-Use enum + service methods for transitions (PENDING -> PAID -> SHIPPED).
-Prevents invalid states.
-
-### Separation of Concerns
-Customer orders vs internal purchase orders.
-Different APIs or clear scoping.
-
-### Frontend
-Cart as local state + sync to backend.
-Order history as server state via TanStack Query.
-
-## Architecture
-Same layered as HR project for consistency in learning.
-Emphasize query optimization for reports.
-
-Common pitfalls: Race conditions on stock, poor error handling on checkout, mixing customer and admin logic.
+Follow-up learning work is in [practice](astraupskill/05-PRACTICE.md). Authentication, tenant ownership, idempotency, stock movement ledgers and existing-database migration are proposals, not delivered features.

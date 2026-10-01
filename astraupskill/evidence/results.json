@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "backendTests": 24,
+  "database": "PostgreSQL; fresh helper-owned loopback cluster; migrations applied",
+  "mode": "verify",
+  "frontendTests": 8,
+  "browserTests": 5,
+  "backendBuild": true,
+  "frontendBuild": true,
+  "tests": 37,
+  "screenshotsReviewed": 2
+}

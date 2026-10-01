@@ -1,22 +1,15 @@
-// Orders - transactional
-
 import { Router } from 'express';
-import * as orderService from '../services/orderService';
-
-const router = Router();
-
-router.get('/', async (req, res) => {
-  const orders = await orderService.getOrders();
-  res.json({ data: orders });
-});
-
-router.post('/', async (req, res) => {
-  try {
-    const order = await orderService.createOrder(req.body);
-    res.status(201).json({ data: order });
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
-
-export default router;
+import { PrismaClient } from '@prisma/client';
+import { orderService } from '../services/orderService';
+import { asyncRoute, presentOrder } from '../http';
+export default function orderRoutes(db: PrismaClient) {
+  const router = Router(); const service = orderService(db);
+  router.get('/', asyncRoute(async (request, response) => response.json({ data: (await service.getOrders(request.query)).map(presentOrder) })));
+  router.get('/:id', asyncRoute(async (request, response) => response.json({ data: presentOrder(await service.getOrder(request.params.id)) })));
+  router.post('/', asyncRoute(async (request, response) => {
+    const order = await service.createOrder(request.body);
+    response.location(`/api/orders/${order.id}`).status(201).json({ data: presentOrder(order) });
+  }));
+  router.patch('/:id/status', asyncRoute(async (request, response) => response.json({ data: presentOrder(await service.transitionOrder(request.params.id, request.body)) })));
+  return router;
+}

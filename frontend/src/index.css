@@ -1,1 +1,13 @@
-@tailwind base; @tailwind components; @tailwind utilities;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { font-family: system-ui, sans-serif; color: #192f3c; background: #f4f7f8; line-height: 1.6; }
+* { box-sizing: border-box; } body { margin: 0; } main { max-width: 1180px; margin: auto; padding: 32px 24px 64px; }
+h1 { font-size: clamp(2rem, 5vw, 3.1rem); line-height: 1.15; font-weight: 750; } h2 { font-size: 1.4rem; font-weight: 700; margin: 12px 0; } h3 { font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
+p { margin: 10px 0; } header { margin-bottom: 28px; } .eyebrow { color: #087665; font-weight: 700; letter-spacing: .12em; font-size: .8rem; }
+.grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; align-items: start; } section { background: white; border: 1px solid #d8e2e6; border-radius: 12px; padding: 24px; min-width: 0; margin-bottom: 24px; }
+.cards { list-style: none; padding: 0; } .cards > li { padding: 16px 0; border-bottom: 1px solid #d8e2e6; } .orders { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px,100%), 1fr)); gap: 20px; }
+label { display: flex; flex-direction: column; margin: 12px 0; font-weight: 600; } input { background: #fff; border: 1px solid #8298a3; border-radius: 6px; padding: 9px 12px; min-width: 0; width: 100%; font: inherit; }
+button { border: 1px solid #147766; border-radius: 6px; color: #065d4e; background: #effaf6; padding: 8px 12px; font: inherit; cursor: pointer; margin: 4px 4px 4px 0; overflow-wrap: anywhere; } button[type=submit] { background: #087665; color: white; } button:disabled { opacity: .5; cursor: not-allowed; } :focus-visible { outline: 3px solid #e39c21; outline-offset: 2px; }
+fieldset { border: 0; padding: 0; min-width: 0; } .actions, nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .notice { background: #eef5fa; padding: 12px; border-radius: 6px; } .error { background: #ffeded; color: #9b2222; padding: 12px; } .success { background: #e2f6ec; padding: 12px; } .identifier { font-family: monospace; font-size: .8rem; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 20px 12px; } section { padding: 16px; } }

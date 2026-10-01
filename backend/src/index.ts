@@ -1,21 +1,12 @@
-// Order Management Backend
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import productRoutes from './routes/productRoutes';
-import orderRoutes from './routes/orderRoutes';
-
-dotenv.config();
-
-const app = express();
-const PORT = process.env.PORT || 4000;
-
-app.use(cors());
-app.use(express.json());
-
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
-
-app.use('/api/products', productRoutes);
-app.use('/api/orders', orderRoutes);
-
-app.listen(PORT, () => console.log(`Order Backend on ${PORT}`));
+import 'dotenv/config';
+import { createApp } from './app';
+import { prisma } from './db';
+const port = Number(process.env.PORT ?? 4000);
+if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT must be an integer from 0 to 65535.');
+const server = createApp(prisma).listen(port, process.env.HOST ?? '127.0.0.1', () => {
+  const address = server.address();
+  if (address && typeof address !== 'string') console.log(`Order API listening on http://${address.address}:${address.port}`);
+});
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
+  server.close(() => { void prisma.$disconnect(); });
+});

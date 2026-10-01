@@ -1,0 +1,17 @@
+{
+  "name": "order-inventory-learning-lab",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm ci && npm ci --prefix backend && npm ci --prefix frontend",
+    "dev:api": "npm run dev --prefix backend",
+    "dev:web": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "test:web": "npm test --prefix frontend -- --run",
+    "test:api": "node scripts/test-database.mjs backend",
+    "verify": "node scripts/test-database.mjs verify"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0"
+  }
+}
