@@ -8,7 +8,7 @@
 
 **Action.** Order creation became one interactive transaction (`backend/src/repositories/orderRepository.ts:10-29`). It reads all requested products in one query, then reserves each line with a single conditional write: `updateMany({ where: { id, version, stock: { gte: quantity } }, data: { stock: { decrement: quantity }, version: { increment: 1 } } })` at line 22. A zero row count becomes 409 "Inventory changed during checkout. Refresh and retry." at line 23, and because the order insert at line 28 is inside the same transaction, a failure there rolls back every reservation already made.
 
-**Result.** "prevents two concurrent orders from reserving the same last unit" (`backend/src/__tests__/orderService.test.ts:75`) runs both requests concurrently and asserts exactly one order exists. "rolls back stock when the final order insert fails" (line 79) injects a failure at the last statement and asserts the stock is untouched. The delivery run passed all 37 cases, 24 of them against a real PostgreSQL cluster, with the log kept as `astraupskill/evidence/backend-tests.log`.
+**Result.** "prevents two concurrent orders from reserving the same last unit" (`backend/src/__tests__/orderService.test.ts:75`) runs both requests concurrently and asserts exactly one order exists. "rolls back stock when the final order insert fails" (line 79) injects a failure at the last statement and asserts the stock is untouched. The delivery run passed all 37 cases, 24 of them against a real PostgreSQL cluster, with the per-case report kept as `astraupskill/evidence/backend.json`.
 
 ## STAR story 2: Alice renames a product and erases Bob's order
 
@@ -28,7 +28,7 @@
 
 **Action.** The refusal itself was correct and came from the database: `OrderItem_productId_fkey` is `ON DELETE NO ACTION` (`backend/prisma/migrations/20260909000000_initial/migration.sql:21`). What was missing was translation, so I mapped Prisma's `P2003` in the one place that owns HTTP semantics, `backend/src/app.ts:22-23`, to a 409 with its own sentence: "This product is referenced by order history and cannot be deleted."
 
-**Result.** "protects product records referenced by order history" (`orderService.test.ts:117`) passes, and the failed log is still in the repository as `astraupskill/evidence/backend-tests-first-run.log`, linked from `astraupskill/VERIFICATION.md`. Keeping it is the point: it is the difference between a constraint that was proved and one that was assumed.
+**Result.** "protects product records referenced by order history" (`orderService.test.ts:117`) passes, and `astraupskill/VERIFICATION.md` records the earlier failed run (23 passed, 1 failed). Recording it is the point: it is the difference between a constraint that was proved and one that was assumed.
 
 ## Resume bullets
 

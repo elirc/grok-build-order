@@ -1,10 +1,26 @@
 # Solution sketches and review questions
 
-Use these notes after attempting [the exercises](05-PRACTICE.md). Exercises 1 to 4 now include real code, because a design sketch is not enough when you have never written the thing before; read the code only after your own attempt compiles or visibly fails. Exercises 5 to 7 stay as design guidance on purpose, because there is no single right answer to an authorization boundary. A useful review checks observable behavior and failure handling rather than whether the code resembles one preferred pattern.
+Use these notes after attempting [the exercises](05-PRACTICE.md); the warm-up drills are answered by their `Check` lines. Exercises 1 to 4 include real code, because a design sketch is not enough when you have never written the thing before; read the code only after your own attempt compiles or visibly fails. Exercises 5 to 7 stay as design guidance on purpose, because there is no single right answer to an authorization boundary. A useful review checks observable behavior and failure handling rather than whether the code resembles one preferred pattern.
+
+## Senior review of the shipped code
+
+These are observations about the delivered code, each checkable at the cited lines. They are review material, not bugs you must fix before the exercises.
+
+**The version guard makes popular products fail under load.** Reservation reads products without a lock (`orderRepository.ts:13`) and then requires the version it read (line 22). Two customers each buying one unit of a product with 100 in stock overlap like this: T1 updates and bumps the version, T2 waits on the row lock and then re-checks `version: 3` against the new row, matches nothing, and returns 409 "Inventory changed during checkout". Nothing was wrong with T2's order. `stock: { gte }` alone already prevents overselling (W3 and Exercise 0 show this), and the `version: { increment: 1 }` in `data` is what protects stale editors, so the version in the `where` buys little and costs real orders. The ecommerce sibling project avoids this by locking each row with `SELECT ... FOR UPDATE` before reading it, so the version it compares is always current.
+
+**Restoration has no upper bound.** Cancellation increments stock unconditionally (`orderRepository.ts:39`). Validation caps editable stock at 2,000,000,000 (`validation.ts:5`), but a restore can push a product past that cap (up to PostgreSQL's integer limit), after which saving the unchanged edit form fails validation with a 400. The ecommerce project refuses such a cancellation with an explicit 409. The window is small; the review point is that every writer of a column must respect the same bounds.
+
+**Lock order is consistent, but by two different sort rules.** `create` sorts cart lines with JavaScript `localeCompare` (line 12), while cancellation walks `order.items`, ordered by the database (`orderBy: { productId: 'asc' }`, line 4). With Prisma `cuid()` ids both orders agree. With ids whose collation differs from `localeCompare` (mixed case, punctuation), two transactions could take row locks in opposite orders. Sorting with a plain `<` comparison in both places would remove the question.
+
+**Transitions are guarded by status, not version.** `transition` pre-checks PENDING (line 35) and repeats it in the conditional update (line 36), so concurrent cancellations have exactly one winner ("competing cancellations cannot restore stock twice", `orderService.test.ts:98`). Because `Order` has no version column (`schema.prisma:27-35`), a client acting on a stale view of an order gets no conflict as long as the order is still PENDING. Exercise 2 adds the version that would make such staleness visible.
+
+**Anyone can act on any order.** `cors()` accepts every origin (`app.ts:12`) and `userId` is caller-supplied (`validation.ts:9`), so any local client can cancel or fulfill any order id. README states this; Exercise 5 is the fix.
 
 ## Exercise 0 - the red-first run
 
-There is no code to check here, only your notes. The expected outcome: removing `version: product.version` leaves `stock: { gte: item.quantity }` in place, so the suite still refuses to oversell - the last-unit race test may still pass - but the *stale editor* tests fail, because an edit form that read version 3 can now overwrite a reservation made at version 4. Removing `stock: { gte: item.quantity }` instead makes the overselling tests fail while the stale-editor tests still pass. If your two failure lists were identical, you did not actually restore the first line before making the second edit. The lesson to write down: the two clauses in one `where` are two separate invariants that happen to share a statement.
+There is no code to check here, only your notes. Expected outcome: removing either `version: product.version` or `stock: { gte: item.quantity }` alone leaves all 24 tests green. The losing transaction's `UPDATE` waits for the winner's row lock and then re-checks its `WHERE` against the committed row, so either remaining clause makes it match nothing. "Prevents stale inventory forms" keeps passing because the version is incremented in `data`, not guarded in `where`. Only removing both clauses lets the loser's decrement reach PostgreSQL, where `Product_stock_nonnegative` rejects it and the last-unit test sees `[201, 500]`, when the two requests overlap.
+
+If you predicted "the version clause guards editors and the stock clause guards overselling", that is the common intuition and the reason this exercise exists: overlapping guards hide each other from the tests. The useful follow-up is one test per guard, which for this code starts with a plenty-of-stock race where the version clause causes a spurious 409 (see the senior review above).
 
 ## Exercise 1 - filter the catalog
 
@@ -31,12 +47,12 @@ findAll(page: ProductQuery) {
 
 `mode: 'insensitive'` is the answer to the case-sensitivity question the exercise asks: it makes Prisma emit `ILIKE`, so the behaviour is defined by your query rather than left to the database's collation. Note that `contains` passes `%` and `_` straight through to `LIKE`; if that matters to you, escape them before building the filter.
 
-On the client, the filter has to be part of the cache key or React Query will show you the previous filter's page:
+On the client, the filter has to be part of the cache key or React Query will show you the previous filter's page. Today the key is `['products', offset]` and `fetchProducts(offset, signal)` (`frontend/src/api/client.ts:15`) takes no filter, so extend both:
 
 ```ts
 const { data } = useQuery({
   queryKey: ['products', { search, offset }],
-  queryFn: () => listProducts({ search, offset }),
+  queryFn: ({ signal }) => fetchProducts(offset, search, signal),
 });
 ```
 
@@ -86,7 +102,8 @@ The failing test you should have written first:
 
 ```ts
 it('rejects a note written against a stale order version', async () => {
-  const order = await createTestOrder();                       // version 1
+  const p = await product();                                   // helpers at orderService.test.ts:19-20
+  const order = (await checkout(p.id)).body.data;              // version 1
   const first = await request(app).patch(`/api/orders/${order.id}`)
     .send({ notes: 'leave at reception', version: 1 });
   expect(first.status).toBe(200);
@@ -125,13 +142,17 @@ model StockMovement {
 }
 ```
 
-The `@@unique([orderId, productId, reason])` is what makes double restocking impossible at the database level, not merely improbable: a second `CANCEL_RESTORE` for the same order line violates the constraint. Write the movement inside the transaction that already exists, next to the `updateMany`:
+The `@@unique([orderId, productId, reason])` is what makes double restocking impossible at the database level, not merely improbable: a second `CANCEL_RESTORE` for the same order line violates the constraint. Write the movements inside the transaction that already exists, but after `tx.order.create` (line 28), because the order id does not exist while the reservation loop runs:
 
 ```ts
-const reserved = await tx.product.updateMany({ where: { id: product.id, version: product.version, stock: { gte: item.quantity } }, data: { stock: { decrement: item.quantity }, version: { increment: 1 } } });
-if (!reserved.count) throw new HttpError(409, 'Inventory changed during checkout. Refresh and retry.');
-await tx.stockMovement.create({ data: { productId: product.id, quantity: -item.quantity, reason: 'RESERVE' } });
+const order = await tx.order.create({ data: { userId: input.userId, total, items: { create: lines } }, include: details });
+await tx.stockMovement.createMany({
+  data: lines.map(line => ({ productId: line.productId, orderId: order.id, quantity: -line.quantity, reason: 'RESERVE' })),
+});
+return order;
 ```
+
+Without `orderId` the unique index cannot help: PostgreSQL treats NULLs as distinct, so `(NULL, productId, 'RESERVE')` rows never collide.
 
 `tx`, not `db`. Using `db` there is the exact bug the exercise is checking for: the ledger row would survive a rolled-back reservation and the balance would stop explaining the stock. Direct catalog stock edits in `productRepository.update` need a `MANUAL_ADJUST` movement for the delta, or your history view will show a balance that does not reconcile and you will not know whether the bug is in the ledger or in the sum.
 
@@ -167,7 +188,7 @@ create(input: OrderInput, idempotencyKey: string) {
 }
 ```
 
-Sorting the items before hashing is why two clients that describe the same cart in different orders get one order rather than two; it is the same reason the delivered code sorts before reserving. The concurrent loser needs one more piece: two transactions can both find no key and both try to insert it, and one of them will fail the primary-key constraint at commit. Catch **only** `PrismaClientKnownRequestError` with `code === 'P2002'`, re-read the winner, compare fingerprints, and return it. Catching every exception and calling it a duplicate is how a connection failure turns into a wrong 200.
+Sorting the items before hashing is why two clients that describe the same cart in different orders get one order rather than two. The concurrent loser needs more care than a unique-key catch. Both transactions find no key and both enter the reservation loop; the second then waits on the first's product row lock and, because of the version clause at line 22, usually fails with 409 "Inventory changed" *before* it reaches the key insert, so the retry reports a conflict instead of the order that exists. Serialize on the key first, before the lookup, as the ecommerce project does (`pg_advisory_xact_lock(hashtextextended(key, 0))` in its `orderRepository.ts`). Keep a `P2002` handler as a backstop and run its re-read as a new query outside the aborted transaction. Catch **only** `PrismaClientKnownRequestError` with `code === 'P2002'`; catching every exception and calling it a duplicate is how a connection failure turns into a wrong 200. Finally, scope the key: a global `@id` lets one caller's key collide with another's, so include the namespace or owner in the primary key.
 
 Prove it with two real clients against the temporary database, not a mocked lookup: fire both requests without awaiting the first, assert one order row exists, assert stock decremented once, then retry the first key a third time and assert you still have one order.
 

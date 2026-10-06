@@ -2,23 +2,54 @@
 
 Complete these exercises in order. Each asks for a behavior, an invariant and evidence. The features below are proposed learner work, not features already implemented. Keep changes small enough that another person can review the reasoning and the failing test together.
 
-Exercises 1 to 4 are ordinary homework and each is roughly one evening. Exercises 5 to 7 are marked *stretch*: they are mid-to-senior design tasks, and the honest way to do them is to write the design note and walk a senior through it rather than to sit alone until they compile.
+The warm-up drills need only Node. Exercises 1 to 4 are ordinary homework and each is roughly one evening. Exercises 5 to 7 are marked *stretch*: they are mid-to-senior design tasks, and the honest way to do them is to write the design note and walk a senior through it rather than to sit alone until they compile.
+
+## Warm-up drills (no install, no database)
+
+Each drill copies a few lines of real source into a scratch file outside the repo, for example `../scratch/order.test.mjs`, starting with `import test from "node:test";` and `import assert from "node:assert/strict";`. Run it with `node --test ../scratch/order.test.mjs`.
+
+### W1. The price grammar
+
+**Goal:** know exactly which price strings the API accepts.
+
+Copy the regex and the positive refine from `backend/src/validation.ts:3-4` into `priceOk(value)`. Assert that `3.25`, `10`, `0.5`, and `9999999999.99` pass, and that `0`, `0.00`, `3.255`, `-1`, `01.5`, `1e3`, and `10000000000` fail.
+
+**Check:** the test passes. Explain why `"0.00"` fails even though the regex matches it (the refine at line 4).
+
+### W2. Do the validation bounds fit the columns?
+
+**Goal:** prove by arithmetic that no valid order can overflow its stored total.
+
+Product price is `DECIMAL(12,2)` and order total `DECIMAL(18,2)` (`backend/prisma/schema.prisma:19` and `:31`). Using `BigInt` cents, compute the largest valid line total (price `9999999999.99` × quantity 10,000, the limit in `validation.ts:10`) times the 50-line cart limit, and count its integer digits.
+
+**Check:** your assertions pass with the largest price fitting 10 integer digits and the worst-case total needing exactly 16, the most `DECIMAL(18,2)` allows. Then say what the ecommerce sibling project does instead (an explicit total bound before insert).
+
+### W3. Model the reservation race
+
+**Goal:** predict Exercise 0's results before you touch the code.
+
+Write `race({ stock, qty, useVersion, useStock })` modelling two transactions under PostgreSQL READ COMMITTED: both read the same `{stock, version}` (`orderRepository.ts:13`), both pass the JavaScript pre-check (line 20), T1 updates, then T2's `UPDATE` re-checks its `WHERE` against T1's committed row. Return `201` for success, `409` when the pre-check or the `WHERE` fails, and `500` when the update would break `Product_stock_nonnegative` (migration line 7).
+
+**Check:** for stock 1 your model returns `[201, 409]` for both guards, for either guard alone, and `[201, 500]` with neither guard. For stock 100 with both guards it returns `[201, 409]`: a version guard rejects an overlapping order even when stock is plentiful.
 
 ## 0. Break the guard on purpose, then put it back (red first, 20 minutes)
 
-Do this before writing any new code. It takes a working system and shows you the exact line that is holding the invariant up.
+Do this after W3. It takes a working system and shows you which lines actually hold the invariant up, and that the answer is not "each one".
 
 1. Make sure the suite is green first: `npm run test:api` should report 24 passing cases. If it does not, fix your environment before continuing.
-2. Open [orderRepository.ts](../backend/src/repositories/orderRepository.ts) and, in the `updateMany` call inside `create`, delete `version: product.version,` from the `where` clause so the condition is only `{ id: product.id, stock: { gte: item.quantity } }`.
-3. Run `npm run test:api` again. Write down, by name, which cases fail and the exact assertion message. (Expect `'prevents two concurrent orders from reserving the same last unit'` to be among them.) Predict *before* you look: does removing the version but keeping `stock: { gte: ... }` still prevent overselling? Your notes should record what you predicted and what actually happened.
-4. Now restore that clause and instead delete `stock: { gte: item.quantity }`. Run the suite again and record which cases fail this time. The two conditions defend different things; the failure lists prove which is which.
-5. Restore the file exactly (`git diff -w backend/src/repositories/orderRepository.ts` should be empty, or paste the original line back), rerun `npm run test:api`, and confirm 24 passing again before you move on.
+2. Open [orderRepository.ts](../backend/src/repositories/orderRepository.ts) and, in the `updateMany` call inside `create` (line 22), delete `version: product.version,` from the `where` clause so the condition is only `{ id: product.id, stock: { gte: item.quantity } }`.
+3. Run `npm run test:api` again and record the result. Prediction from W3: still 24 passing. The losing transaction re-checks `stock >= 1` against the winner's row and gets `count = 0`. "Prevents stale inventory forms from restoring reserved stock" (`orderService.test.ts:87`) also still passes, because the `data` clause still increments the version.
+4. Restore that clause and instead delete `stock: { gte: item.quantity }`. Prediction: still 24 passing; now the version re-check makes the loser match nothing.
+5. Delete both clauses. Prediction: "prevents two concurrent orders from reserving the same last unit" (line 75) usually fails with statuses `[201, 500]` instead of `[201, 409]`. Stock still ends at 0, because the CHECK constraint is the last line of defence. If the two requests happen not to overlap, the pre-check at line 20 answers 409 and the test passes, so rerun it a few times and record how often it fails. That flakiness is itself a lesson about race tests.
+6. Restore the file exactly (`git diff backend/src/repositories/orderRepository.ts` should be empty), rerun `npm run test:api`, and confirm 24 passing again.
 
-The point of the exercise is not the edit; it is that you can now name the test that would catch a regression in each guard. When you add a guard of your own in the exercises below, write the test that goes red without it first.
+The point is not the edit. When guards overlap, removing one proves nothing, and you need to know which test, if any, notices each guard. When you add a guard of your own below, write the test that goes red without it first.
 
 ## 1. Filter the catalog without breaking paging
 
 Add a name filter with a maximum length and explicit empty-string behavior. Extend the server query schema rather than accepting arbitrary Prisma filters. Include the filter in the QueryClient key and reset the page when it changes. Seed more than twenty products and prove the second page belongs to the same filter. Test rapid filter changes with delayed responses so an older request cannot overwrite the current result. Explain whether case sensitivity is defined by your query or database collation.
+
+**Check:** an integration test seeds 25 products, 22 of them matching the filter, and asserts that `offset=20` returns exactly the 2 remaining matches; a component test resolves two filter responses out of order and the newer filter's rows are the ones rendered.
 
 ## 2. Add order notes behind a version check (write the test first)
 
@@ -30,13 +61,19 @@ Then implement: add `notes String?` and `version Int @default(1)` to `model Orde
 
 Three decisions you must make explicitly, because the tests differ depending on the answer: does the status transition in `transition()` also bump `Order.version` (if not, a note editor can be stale about status without noticing)? May a CANCELLED order still take a note? Does an empty string clear the note or is that a 400?
 
+**Check:** your first test goes from 404 to passing, and after the stale PATCH the stored note is still the first one.
+
 ## 3. Add an inventory movement ledger
 
 Create a StockMovement model recording product, signed quantity, reason, timestamp and an order reference where appropriate. Write reservation and cancellation movements in their existing transactions. A failed order insert must leave neither stock changes nor movement rows. A repeated cancellation must not create another restoration movement. Decide how direct catalog stock edits appear in the ledger; a journal that ignores adjustments cannot explain the balance. Build a read-only product history view and compare its sum with the stored quantity using a known opening balance.
 
+**Check:** with the trigger technique from "rolls back stock when the final order insert fails" (`orderService.test.ts:79`), both the stock and the movement count are unchanged; after reserve, cancel, and a manual edit, opening balance plus the sum of movements equals the stored stock.
+
 ## 4. Make order creation safe to retry
 
 Add a caller-supplied idempotency key scoped to a future account or an explicitly documented local namespace. Store the key, canonical request fingerprint and winning order in the same transaction. Two concurrent equivalent requests should return one order; the same key with a different cart should conflict. Simulate the client losing the first successful response and retrying. Demonstrate that stock is reserved once. Do not merely disable the Place order button: that protects one mounted browser event path, not network retries or another tab.
+
+**Check:** two concurrent requests with the same key and cart produce one order row and one stock decrement, and both responses carry the same order id; the same key with a different cart returns 409.
 
 ## 5. Introduce authenticated ownership *(stretch — pair with a senior)*
 

@@ -1,24 +1,21 @@
 # Verification evidence and practical limits
 
-Final result, as of the 2026-09-09 delivery run: all 37 cases passed (24 database, eight frontend, five browser), both builds passed, and the temporary PostgreSQL cluster stopped successfully. The 37 are 24 `it(` blocks in `backend/src/__tests__/orderService.test.ts`, 8 in `frontend/src/__tests__/ProductsPage.test.tsx` and 5 in `e2e/orders.spec.ts`; no parametrized expansion is involved, so you can count them by hand. The [desktop](images/desktop.png) and [narrow](images/narrow.png) screenshots were visually reviewed.
+Final result, as of the 2026-09-09 delivery run: all 37 cases passed (24 database, eight frontend, five browser), both builds passed, and the temporary PostgreSQL cluster stopped successfully. The 37 are 24 `it(` blocks in `backend/src/__tests__/orderService.test.ts`, 8 in `frontend/src/__tests__/ProductsPage.test.tsx` and 5 `test(` blocks in `e2e/orders.spec.ts`; no parametrized expansion is involved, so you can count them by hand. The [desktop](images/desktop.png) and [narrow](images/narrow.png) screenshots were visually reviewed.
 
 This project includes three complementary test layers and a repeatable full gate. Run `npm run verify` from the root to reproduce the database, frontend, browser and build checks.
 
 ## The logs behind the numbers
 
-The unedited output of the run described here is in [evidence/](evidence/), so you can check every number below without running anything:
+Four JSON reports from the run described here are committed in [evidence/](evidence/), so you can check the counts without running anything:
 
 | File | What it proves |
 | --- | --- |
 | [evidence/results.json](evidence/results.json) | The summary: `backendTests: 24`, `frontendTests: 8`, `browserTests: 5`, `tests: 37`. |
-| [evidence/backend-tests.log](evidence/backend-tests.log) | Jest against real PostgreSQL, ending `Tests: 24 passed, 24 total` in 17.2 s. Read the case names; they are the invariant names. |
-| [evidence/backend.json](evidence/backend.json) | The same run as machine-readable JSON, one entry per case. |
-| [evidence/frontend.json](evidence/frontend.json) | The eight Vitest component cases (`frontend-tests.log` only records where this report was written). |
-| [evidence/browser-tests.log](evidence/browser-tests.log) | The Playwright JSON report: five Chromium scenarios, `"unexpected": 0, "flaky": 0`. |
-| [evidence/initdb.log](evidence/initdb.log), [evidence/postgres-start.log](evidence/postgres-start.log), [evidence/postgres-stop.log](evidence/postgres-stop.log), [evidence/migrations.log](evidence/migrations.log) | The disposable cluster really was created, started, migrated and stopped. |
-| [evidence/backend-tests-first-run.log](evidence/backend-tests-first-run.log) | The **failed** earlier run: `Tests: 1 failed, 23 passed, 24 total`. Kept deliberately - see the paragraph on failed runs below. |
+| [evidence/backend.json](evidence/backend.json) | Jest against real PostgreSQL, `numPassedTests: 24` of `numTotalTests: 24`, one entry per case. Read the case names; they are the invariant names. |
+| [evidence/frontend.json](evidence/frontend.json) | The eight Vitest component cases. |
+| [evidence/browser.json](evidence/browser.json) | The Playwright report: `stats` shows `"expected": 5, "unexpected": 0, "flaky": 0`. |
 
-Three log files from the run were zero bytes because the commands they captured print nothing on success (`tsc` backend build, `createdb`, frontend typecheck); they are omitted rather than shipped as empty files. `backend-build.log` being empty *is* the pass for `tsc`. Prerequisites are Node/npm, PostgreSQL command-line binaries and the Playwright Chromium installation matching the locked dependency version.
+The text logs from that run (cluster `initdb`/start/stop, migrations, and the failed first backend run described below) were not committed (status checked 2026-10-06), so those parts of this record are statements, not inspectable files. Prerequisites are Node/npm, PostgreSQL command-line binaries and the Playwright Chromium installation matching the locked dependency version.
 
 The verification environment used Node 22.16.0, npm 10.9.2, PostgreSQL 18.1, Prisma 5.22.0 and Playwright 1.60.0. Dependency lockfiles cover root, backend and frontend. The initial install wrapper timed out, but npm's completion logs and subsequent dependency-tree checks showed successful installs in all three locations. The actual compile and runtime checks are stronger evidence than installation alone.
 

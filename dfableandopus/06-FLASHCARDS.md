@@ -45,6 +45,6 @@ Cover the right column.
 | Is CORS access control here? | No, `cors()` is unconfigured and allows every origin (`app.ts:12`) |
 | Which tables exist but have no routes? | `Supplier` and `PurchaseOrder`, declared as future exercises (`backend/prisma/schema.prisma:50-64`) |
 | How many checks passed on the delivery run? | 37: 24 backend, 8 frontend, 5 browser (`astraupskill/VERIFICATION.md`) |
-| What does `astraupskill/evidence/backend-tests-first-run.log` show? | The earlier failing run, 1 failed of 24, on referenced-product deletion returning 500 |
+| What did the first backend run show (recorded in `astraupskill/VERIFICATION.md`)? | 1 failed of 24: referenced-product deletion returned 500 |
 | Command for the backend suite? | `npm run test:api`, which is `node scripts/test-database.mjs backend` |
 | Two limits to volunteer in an interview? | No authentication or ownership, and no idempotency on order creation |

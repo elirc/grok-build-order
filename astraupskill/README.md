@@ -17,8 +17,9 @@ Start by reading the [project setup](../README.md). Install the locked dependenc
 | [01 Codebase map](01-CODEBASE-MAP.md) + [02 Concepts](02-CONCEPTS.md) | ~1 hour together, plus a second pass over 02 later — it is dense |
 | [03 Worked change](03-WORKED-CHANGE.md) | ~2 hours with the source files open beside it |
 | [04 Testing and debugging](04-TESTING-AND-DEBUGGING.md) | ~1 hour, including one real `npm run verify` run |
-| [05 Practice](05-PRACTICE.md) 1–3 | one evening each |
-| [05 Practice](05-PRACTICE.md) 4–6 | stretch goals; pair with a senior rather than budgeting them |
+| [05 Practice](05-PRACTICE.md) warm-up drills W1–W3 and Exercise 0 | ~1 hour; the drills need only Node |
+| [05 Practice](05-PRACTICE.md) 1–4 | one evening each |
+| [05 Practice](05-PRACTICE.md) 5–7 | stretch goals; pair with a senior rather than budgeting them |
 | [07 Trace lab](07-TRACE-LAB.md) | ~1.5 hours with the browser Network panel open |
 
 ## Glossary
@@ -34,7 +35,7 @@ Terms this course uses without stopping to define them in the chapters:
 - **409 Conflict** — the HTTP status this app returns when your write was refused because the record changed under you. **404 Not Found** means the row is gone; the repository tells those two apart deliberately.
 - **Decimal** — an exact base-10 number type (`Prisma.Decimal`, PostgreSQL `numeric`). Money is stored and added with it so `0.1 + 0.2` problems cannot occur.
 - **Snapshot** — a copy of a value written at the moment of a business event. `OrderItem.productName` and `OrderItem.price` are snapshots of the catalog at purchase time.
-- **Idempotency** — the property that repeating the same request produces the same single effect. This app does **not** have it; exercise 3 adds it.
+- **Idempotency** — the property that repeating the same request produces the same single effect. This app does **not** have it; exercise 4 adds it.
 - **Terminal state** — a status that cannot change again. `CANCELLED` and `FULFILLED` are terminal; `PENDING` is not.
 - **Envelope** — the `{ "data": [...] }` wrapper the list endpoints return, so pagination metadata has somewhere to live.
 
